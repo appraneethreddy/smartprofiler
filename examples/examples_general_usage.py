@@ -2,11 +2,13 @@ import time
 import requests
 import logging
 import argparse
+import tempfile
+import os
 from smartprofiler import CPUProfiler, DiskProfiler, FunctionProfiler, MemoryProfiler, NetworkProfiler
 
 def setup_logger(logger_type: str = None) -> logging.Logger:
     """
-    Set up and return a logger based on the specified type.
+    ... (rest of the code remains the same)
     
     Args:
         logger_type: Type of logger to use ('loguru', 'structlog', or None for default)
@@ -54,9 +56,12 @@ def main():
     logger = setup_logger(args.logger)
     print(f"\nUsing {args.logger if args.logger else 'default'} logger\n")
 
+    # Get a temporary directory for the current OS
+    temp_dir = tempfile.gettempdir()
+
     # Initialize profilers with custom logging settings
     cpu_profiler = CPUProfiler(time_func='execution_time', logger=logger, log_level=logging.DEBUG)
-    disk_profiler = DiskProfiler(disk_path='/tmp', disk_metrics={'write_bytes': True, 'disk_usage': False}, logger=logger, log_level=logging.DEBUG)
+    disk_profiler = DiskProfiler(disk_path=temp_dir, disk_metrics={'write_bytes': True, 'disk_usage': False}, logger=logger, log_level=logging.DEBUG)
     func_profiler = FunctionProfiler(logger=logger, log_level=logging.DEBUG)
     mem_profiler = MemoryProfiler(logger=logger, log_level=logging.DEBUG)
     net_profiler = NetworkProfiler(network_metrics={'bytes_sent': True, 'bytes_recv': True}, logger=logger, log_level=logging.DEBUG)
@@ -76,7 +81,7 @@ def main():
     # Example 2: Profile a disk-intensive block
     print("Profiling a disk-intensive block (writing to a file):")
     with disk_profiler.profile_block("disk_write_block"):
-        with open('/tmp/test_file.txt', 'w') as f:
+        with open(os.path.join(temp_dir, 'test_file.txt'), 'w') as f:
             f.write("Sample data " * 1000)
     disk_profiler.summarize_stats()
     print()
@@ -107,6 +112,35 @@ def main():
     # Manually print stats to show they were collected
     stats = net_profiler_silent.get_stats()
     print("Network stats (manually printed):", stats)
+    print()
+
+    # Example 6: Exporting statistics to JSON and CSV
+    print("\nExporting all profiler stats to JSON and CSV files:")
+
+    # Export CPU stats
+    cpu_profiler.export_stats('cpu_stats.json', format='json')
+    cpu_profiler.export_stats('cpu_stats.csv', format='csv')
+    print("- Exported CPU stats to 'cpu_stats.json' and 'cpu_stats.csv'")
+
+    # Export Disk stats
+    disk_profiler.export_stats('disk_stats.json', format='json')
+    disk_profiler.export_stats('disk_stats.csv', format='csv')
+    print("- Exported Disk stats to 'disk_stats.json' and 'disk_stats.csv'")
+
+    # Export Function stats
+    func_profiler.export_stats('func_stats.json', format='json')
+    func_profiler.export_stats('func_stats.csv', format='csv')
+    print("- Exported Function stats to 'func_stats.json' and 'func_stats.csv'")
+
+    # Export Memory stats
+    mem_profiler.export_stats('mem_stats.json', format='json')
+    mem_profiler.export_stats('mem_stats.csv', format='csv')
+    print("- Exported Memory stats to 'mem_stats.json' and 'mem_stats.csv'")
+
+    # Export Network stats
+    net_profiler_silent.export_stats('network_stats.json', format='json')
+    net_profiler_silent.export_stats('network_stats.csv', format='csv')
+    print("- Exported Network stats to 'network_stats.json' and 'network_stats.csv'")
 
 if __name__ == "__main__":
     main()

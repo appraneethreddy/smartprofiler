@@ -1,0 +1,11 @@
+[
+    {
+        "label": "api_request",
+        "metrics": {
+            "bytes_sent": 1362,
+            "bytes_recv": 6024,
+            "packets_sent": 11,
+            "packets_recv": 9
+        }
+    }
+]

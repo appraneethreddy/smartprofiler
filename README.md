@@ -175,10 +175,34 @@ net_profiler = NetworkProfiler(network_metrics={'bytes_sent': True, 'bytes_recv'
 with net_profiler.profile_block("api_request"):
     requests.get('https://api.github.com')
 
-# Manually print stats (since logging is disabled)
+# Manually print stats to show they were collected
 stats = net_profiler.get_stats()
-print("Network stats:", stats)
+print("Network stats (manually printed):", stats)
 ```
+
+**1.4 Exporting Statistics**
+
+SmartProfiler allows you to export profiling data to JSON or CSV files, which can be useful for further analysis with tools like pandas or for generating custom reports.
+
+```python
+from smartprofiler import CPUProfiler
+
+cpu_profiler = CPUProfiler()
+
+@cpu_profiler.profile_function
+def sample_task():
+    # Simulate some work
+    sum(i for i in range(100000))
+
+sample_task()
+
+# Export stats to a JSON file
+cpu_profiler.export_stats('cpu_stats.json', format='json')
+
+# Export stats to a CSV file
+cpu_profiler.export_stats('cpu_stats.csv', format='csv')
+```
+
 See `examples/examples_general_usage.py` for more usage examples, including profiling function calls, memory usage, and multithreaded scenarios.
 
 ### 2. Visualization Examples

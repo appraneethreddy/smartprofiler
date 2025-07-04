@@ -15,6 +15,7 @@ setup(
         'matplotlib>=3.5.0',
         'numpy>=1.21.0',
         'requests>=2.28.0',
+        'filelock',
         'psutil>=5.9.0',  # Added for NetworkProfiler and DiskProfiler
     ],
     description='A comprehensive Python library for profiling CPU, disk, memory, network I/O, and function calls with integrated visualization.',

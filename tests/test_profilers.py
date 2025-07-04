@@ -2,6 +2,9 @@ import unittest
 import time
 import logging
 import sys
+import os
+import json
+import csv
 import tracemalloc
 from unittest.mock import patch, MagicMock
 from smartprofiler import CPUProfiler, DiskProfiler, FunctionProfiler, MemoryProfiler, NetworkProfiler
@@ -320,6 +323,46 @@ class TestProfilers(unittest.TestCase):
         stats = silent_profiler.get_stats()
         self.assertEqual(len(stats), 1)
         self.assertIn('execution_time', stats[0]['metrics'])
+
+    def test_export_stats_json(self):
+        with self.cpu_profiler.profile_block("test_json_export"):
+            time.sleep(0.01)
+
+        json_path = 'test_stats.json'
+        self.cpu_profiler.export_stats(json_path, format='json')
+
+        self.assertTrue(os.path.exists(json_path))
+
+        with open(json_path, 'r') as f:
+            data = json.load(f)
+        
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]['label'], 'test_json_export')
+        self.assertIn('execution_time', data[0]['metrics'])
+
+        os.remove(json_path)
+
+    def test_export_stats_csv(self):
+        with self.cpu_profiler.profile_block("test_csv_export_1"):
+            time.sleep(0.01)
+        with self.cpu_profiler.profile_block("test_csv_export_2"):
+            time.sleep(0.01)
+
+        csv_path = 'test_stats.csv'
+        self.cpu_profiler.export_stats(csv_path, format='csv')
+
+        self.assertTrue(os.path.exists(csv_path))
+
+        with open(csv_path, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            self.assertEqual(header, ['label', 'execution_time'])
+            rows = list(reader)
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[0][0], 'test_csv_export_1')
+            self.assertEqual(rows[1][0], 'test_csv_export_2')
+
+        os.remove(csv_path)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,11 @@
 import logging
 import threading
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, Dict, List, Any
+import logging
+import json
+import csv
+from typing import Any, Callable, Dict, List, Optional
+from filelock import FileLock, Timeout
 from functools import wraps
 from .logger_adapter import LoggerAdapter
 
@@ -76,3 +80,61 @@ class BaseProfiler(ABC):
         self.logger.log(self.log_level, f"Summary of {len(self.stats)} profiling events:")
         for stat in self.stats:
             self.logger.log(self.log_level, f"{stat['label']}: {stat['metrics']}")
+
+    def export_stats(self, file_path: str, format: str = 'json'):
+        """
+        Export profiling statistics to a file in the specified format.
+
+        Args:
+            file_path (str): The path to the output file.
+            format (str): The format for exporting. Can be 'json' or 'csv'.
+                          Defaults to 'json'.
+        """
+        if format not in ['json', 'csv']:
+            self.logger.error(f"Unsupported format: '{format}'. Please use 'json' or 'csv'.")
+            raise ValueError(f"Unsupported format: '{format}'. Please use 'json' or 'csv'.")
+
+        lock_path = f"{file_path}.lock"
+        try:
+            with FileLock(lock_path, timeout=10):
+                if format == 'json':
+                    self._export_to_json(file_path)
+                elif format == 'csv':
+                    self._export_to_csv(file_path)
+        except Timeout:
+            self.logger.error(f"Could not acquire lock on {file_path} after 10 seconds. Another process may be holding it.")
+        except Exception as e:
+            self.logger.error(f"An unexpected error occurred during export: {e}")
+
+    def _export_to_json(self, file_path: str):
+        """Private helper method to export stats to a JSON file."""
+        try:
+            with open(file_path, 'w') as f:
+                json.dump(self.stats, f, indent=4)
+        except (IOError, PermissionError) as e:
+            self.logger.error(f"Error writing to JSON file {file_path}: {e}")
+
+    def _export_to_csv(self, file_path: str):
+        """Private helper method to export stats to a CSV file."""
+        if not self.stats:
+            return
+
+        flattened_data = []
+        for item in self.stats:
+            flat_record = {'label': item.get('label')}
+            flat_record.update(item.get('metrics', {}))
+            flattened_data.append(flat_record)
+
+        header_fields = set(['label'])
+        for record in flattened_data:
+            header_fields.update(record.keys())
+        
+        sorted_header = sorted(list(header_fields), key=lambda x: (x != 'label', x))
+
+        try:
+            with open(file_path, 'w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=sorted_header)
+                writer.writeheader()
+                writer.writerows(flattened_data)
+        except (IOError, PermissionError) as e:
+            self.logger.error(f"Error writing to CSV file {file_path}: {e}")

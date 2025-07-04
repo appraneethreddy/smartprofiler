@@ -1,0 +1,11 @@
+[
+    {
+        "label": "disk_write_block",
+        "metrics": {
+            "read_bytes": 0,
+            "write_bytes": 0,
+            "read_count": 0,
+            "write_count": 0
+        }
+    }
+]
