@@ -1,145 +1,145 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import List, Dict
 import os
-import math
+from .base_profiler import BaseProfiler
 
 
 def plot_profiling_stats(
-        profilers: List,
-        metrics: Dict[str, str] = None,
-        output_dir: str = '.',
-        single_metric: str = None,
-        output_file: str = 'profiling_stats.png'
+    profiling_results: list,
+    title: str = "Profiling Statistics",
+    metric_threshold: dict = None,
+    exclude_zero: bool = True,
+    bar_colors: list = None,
+    use_log_scale: bool = False,
+    output_path: str = None,
 ):
-    """Generate normalized bar plots of profiling statistics in a single PNG file with subplots.
+    """
+    Generates a bar plot of profiling statistics with advanced filtering and customization.
+
+    This function is backward-compatible and can accept either a list of profiler objects
+    (e.g., CPUProfiler) or a list of raw statistics dictionaries.
 
     Args:
-        profilers: List of profiler instances.
-        metrics: Dict mapping profiler class names to metric keys (e.g., {'CPUProfiler': 'execution_time'}).
-        output_dir: Directory to save the plot.
-        single_metric: If specified, plot only this metric; otherwise, plot subplots for each metric.
-        output_file: Name of the output PNG file (default: 'profiling_stats.png').
+        profiling_results (list): A list of profiler objects or raw statistics dictionaries.
+        title (str, optional): The title of the plot. Defaults to "Profiling Statistics".
+        metric_threshold (dict, optional): A dictionary to filter metrics by a minimum value.
+                                           Example: {'execution_time': 0.1}. Defaults to None.
+        exclude_zero (bool, optional): If True, metrics with a value of zero are excluded.
+                                       Defaults to True.
+        bar_colors (list, optional): A list of colors for the bars. If not provided, a default
+                                     colormap will be used. Defaults to None.
+        use_log_scale (bool, optional): If True, the y-axis will use a logarithmic scale.
+                                        Defaults to False.
+        output_path (str, optional): The full path to save the plot file (e.g., 'plots/my_plot.png').
+                                     If not provided, the plot is displayed interactively. Defaults to None.
     """
-    # Create output directory if it doesn't exist
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    # Default metrics if not specified
-    if metrics is None:
-        metrics = {
-            'CPUProfiler': 'execution_time',
-            'DiskProfiler': 'write_bytes',
-            'FunctionProfiler': 'call_count',
-            'MemoryProfiler': 'peak_mb',
-            'NetworkProfiler': 'bytes_sent'
-        }
-
-    # Collect all labels to align data
-    all_labels = set()
-    for profiler in profilers:
-        for stat in profiler.get_stats():
-            all_labels.add(stat['label'])
-    all_labels = sorted(list(all_labels))  # Convert to list for indexing
-
-    if not all_labels:
-        print("No profiling data available to plot.")
+    if not profiling_results:
+        print("No profiling results to plot.")
         return
 
-    # Simplify labels for clarity
-    short_labels = [f"S{i + 1}" for i in range(len(all_labels))]  # S1, S2, S3, ...
-    label_mapping = dict(zip(all_labels, short_labels))
-
-    # Determine which metrics to plot
-    metrics_to_plot = [single_metric] if single_metric else list(metrics.values())
-    num_metrics = len(metrics_to_plot)
-
-    if num_metrics == 0:
-        print("No metrics to plot.")
-        return
-
-    # Calculate subplot grid: limit to 2 columns for readability
-    cols = min(2, math.ceil(math.sqrt(num_metrics)))
-    rows = math.ceil(num_metrics / cols)
-
-    # Create a single figure with subplots
-    fig, axes = plt.subplots(rows, cols, figsize=(12, rows * 4), constrained_layout=True)
-    fig.suptitle('Profiling Statistics (Normalized)', fontsize=16)
-
-    # Flatten axes array for easy iteration
-    if num_metrics == 1:
-        axes = [axes]
+    raw_stats = []
+    # Check if input is a list of profiler objects for backward compatibility
+    if profiling_results and isinstance(profiling_results[0], BaseProfiler):
+        for profiler in profiling_results:
+            raw_stats.extend(profiler.get_stats())
     else:
-        axes = axes.flatten()
+        # Otherwise, assume it's already a list of stats
+        raw_stats = profiling_results
 
-    for idx, metric in enumerate(metrics_to_plot):
-        ax = axes[idx]
-        values = []
-        raw_values = []
-        unit = ''
+    if not raw_stats:
+        print("No profiling data to plot.")
+        return
 
-        # Collect data for the metric
-        for label in all_labels:
-            value = 0
-            raw_value = 0
-            for profiler in profilers:
-                metric_key = metrics.get(profiler.__class__.__name__, 'unknown')
-                if metric_key != metric:
-                    continue
-                stats = profiler.get_stats()
-                label_metrics = {stat['label']: stat['metrics'] for stat in stats}
-                metrics_data = label_metrics.get(label, {})
-                raw_value = metrics_data.get(metric_key, 0)
-                value = raw_value
-                # Apply unit conversion
-                if metric_key in ['write_bytes', 'bytes_sent']:
-                    value /= 1024  # Convert bytes to KB
-                    unit = 'KB'
-                elif metric_key == 'execution_time':
-                    unit = 'seconds'
-                elif metric_key == 'peak_mb':
-                    unit = 'MB'
-                elif metric_key == 'call_count':
-                    unit = 'counts'
-                break  # Only one profiler per metric
-            values.append(value)
-            raw_values.append(raw_value)
+    # Helper to flatten nested metric dictionaries
+    def _flatten_metrics(metrics: dict, parent_key: str = ''):
+        items = []
+        for k, v in metrics.items():
+            new_key = f"{parent_key}_{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.extend(_flatten_metrics(v, new_key).items())
+            else:
+                items.append((new_key, v))
+        return dict(items)
 
-        if not any(v != 0 for v in values):
-            ax.set_visible(False)
-            continue
+    # Process raw_stats to flatten metrics
+    processed_stats = []
+    for record in raw_stats:
+        processed_stats.append({
+            'label': record['label'],
+            'metrics': _flatten_metrics(record.get('metrics', {}))
+        })
 
-        # Normalize values to 0-1
-        max_value = max(values) if max(values) > 0 else 1
-        normalized_values = [v / max_value for v in values]
+    # Filter stats based on threshold and zero-value exclusion
+    filtered_stats = []
+    if metric_threshold is None:
+        metric_threshold = {}
 
-        # Plot normalized bars
-        x_positions = np.arange(len(all_labels))
-        bars = ax.bar(x_positions, normalized_values, color='skyblue')
+    for record in processed_stats:
+        metrics = record.get("metrics", {})
+        filtered_metrics = {}
 
-        # Add raw values as text on top of bars
-        for bar, raw_value in zip(bars, raw_values):
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width() / 2, height, f'{raw_value:.2f}',
-                    ha='center', va='bottom', fontsize=8)
+        for metric, value in metrics.items():
+            if exclude_zero and value == 0:
+                continue
+            if metric in metric_threshold and value < metric_threshold[metric]:
+                continue
+            filtered_metrics[metric] = value
 
-        ax.set_ylim(0, 1.1)  # Slightly above 1 to accommodate text
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels([label_mapping[l] for l in all_labels], rotation=45, ha='right')
-        ax.set_xlabel('Profiled Sections (S#)')
-        ax.set_ylabel('Normalized Value (0-1)')
-        ax.set_title(f'Metric: {metric} ({unit})')
+        if filtered_metrics:
+            filtered_stats.append(
+                {"label": record["label"], "metrics": filtered_metrics}
+            )
 
-    # Hide unused subplots
-    for idx in range(num_metrics, len(axes)):
-        axes[idx].set_visible(False)
+    if not filtered_stats:
+        print("No data available to plot after applying filters.")
+        return
 
-    # Add a legend for section mapping
-    section_legend = "\n".join([f"{short}: {orig}" for orig, short in label_mapping.items()])
-    fig.text(0.95, 0.5, f"Section Mapping:\n{section_legend}", fontsize=10, verticalalignment='center')
+    labels = [record["label"] for record in filtered_stats]
+    all_metrics = sorted(list(set(m for record in filtered_stats for m in record["metrics"])))
 
-    # Save the plot with the specified output file name
-    output_path = os.path.join(output_dir, output_file)
-    plt.savefig(output_path, bbox_inches='tight')
-    plt.close()
-    print(f"Combined profiling plot saved to {os.path.abspath(output_path)}")
+    if not all_metrics:
+        print("No metrics to plot after filtering.")
+        return
+
+    # Prepare data for grouped bar chart
+    metric_values = {metric: [record["metrics"].get(metric, 0) for record in filtered_stats] for metric in all_metrics}
+
+    x = np.arange(len(labels))
+    n_metrics = len(all_metrics)
+    width = 0.8 / n_metrics
+    fig, ax = plt.subplots(figsize=(max(12, len(labels) * 1.5), 8))
+
+    if bar_colors is None:
+        colors = plt.cm.viridis(np.linspace(0, 1, n_metrics))
+    else:
+        colors = [bar_colors[i % len(bar_colors)] for i in range(n_metrics)]
+
+    for i, metric in enumerate(all_metrics):
+        offset = (i - n_metrics / 2 + 0.5) * width
+        rects = ax.bar(x + offset, metric_values[metric], width, label=metric, color=colors[i])
+        ax.bar_label(rects, padding=3, fmt='%.2g')
+
+    # Configure plot aesthetics
+    ax.set_ylabel("Values")
+    ax.set_title(title)
+    ax.set_xticks(x, labels, rotation=45, ha="right")
+    ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
+
+    if use_log_scale:
+        ax.set_yscale("log")
+        ax.set_ylabel("Values (Log Scale)")
+
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    fig.tight_layout()
+
+    # Save to file or show interactively
+    if output_path:
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        
+        plt.savefig(output_path, bbox_inches='tight')
+        print(f"Plot saved to {output_path}")
+        plt.close(fig)
+    else:
+        plt.show()

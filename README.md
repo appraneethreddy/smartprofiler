@@ -16,7 +16,7 @@
 
 - **Function-Level Profiling**: Profile functions for execution time, disk writes, memory usage, network activity, and call counts using decorators.
 - **Block and Line Profiling**: Profile specific code blocks or individual lines using context managers.
-- **Visualization**: Generate a single PNG file with subplots for each metric, showing normalized values and raw data for easy comparison.
+- **Advanced Visualization**: Generate highly customizable, interactive plots. Filter metrics by value, exclude zeros, customize bar colors, and use a logarithmic scale to make sense of your data.
 - **Customizable Metrics**: Configure which metrics to profile (e.g., write_bytes for disk, bytes_sent for network).
 - **Logging Support**: Detailed logs of profiling stats with customizable log levels (e.g., INFO, DEBUG) or the ability to disable logging entirely.
 
@@ -181,62 +181,91 @@ print("Network stats:", stats)
 ```
 See `examples/examples_general_usage.py` for more usage examples, including profiling function calls, memory usage, and multithreaded scenarios.
 
-### 2. Visualization Examples
+### 2. Advanced Visualization Examples
 
-SmartProfiler can generate visualizations of profiling data using the plot_profiling_stats function. The following example demonstrates how to profile various tasks and visualize the results.
+SmartProfiler's `plot_profiling_stats` function allows you to create powerful, customized visualizations from your profiling data. Instead of passing profiler objects, you pass a list of collected statistics, giving you more control over what you display.
 
-**2.1 Profiling and Visualizing CPU, Disk, and Memory Usage**
+First, let's generate some sample data:
 
-```bash
-import time
-import random
-from smartprofiler import CPUProfiler, DiskProfiler, MemoryProfiler, plot_profiling_stats
+```python
+from smartprofiler import CPUProfiler, MemoryProfiler, plot_profiling_stats
 
 # Initialize profilers
-cpu_profiler = CPUProfiler(time_func='execution_time')
-disk_profiler = DiskProfiler(disk_path='/tmp', disk_metrics={'write_bytes': True, 'disk_usage': False})
+cpu_profiler = CPUProfiler()
 mem_profiler = MemoryProfiler()
 
-# Profile a CPU-intensive function
+# Profile a few functions
 @cpu_profiler.profile_function
 @mem_profiler.profile_function
-def matrix_multiply():
-    size = 500
-    matrix_a = [[random.random() for _ in range(size)] for _ in range(size)]
-    matrix_b = [[random.random() for _ in range(size)] for _ in range(size)]
-    result = [[0 for _ in range(size)] for _ in range(size)]
-    for i in range(size):
-        for j in range(size):
-            for k in range(size):
-                result[i][j] += matrix_a[i][k] * matrix_b[k][j]
-    return result
+def fast_function():
+    _ = [i*i for i in range(1000)]
 
-# Run the function
-matrix_multiply()
+@cpu_profiler.profile_function
+@mem_profiler.profile_function
+def slow_function():
+    sum(i for i in range(10**6))
 
-# Generate visualization
+# Run functions
+fast_function()
+slow_function()
+
+# Combine stats into a single list
+all_stats = cpu_profiler.get_stats() + mem_profiler.get_stats()
+```
+
+Now, you can use `plot_profiling_stats` with different options to explore the data.
+
+**Note:** Each plot is displayed in an interactive window. You must close the current plot window to see the next one.
+
+### 2.1 Default Plot
+
+By default, metrics with zero values are excluded to keep the plot clean.
+
+```python
 plot_profiling_stats(
-    [cpu_profiler, disk_profiler, mem_profiler],
-    output_dir='images',
-    output_file='profiling_stats_cpu_disk_memory.png'
+    all_stats,
+    title="Default Profile (Zeros Excluded)"
 )
 ```
 
-**Visualization Results**
+### 2.2 Filtering by Threshold
 
+Focus on significant metrics by setting a threshold. This example only shows metrics where `execution_time` is greater than 0.1 seconds.
 
+```python
+plot_profiling_stats(
+    all_stats,
+    title="Profile filtered by Execution Time > 0.1s",
+    metric_threshold={'execution_time': 0.1}
+)
+```
 
+### 2.3 Using Logarithmic Scale and Custom Colors
 
-1. CPU, Disk, and Memory Profiling: This visualization includes CPU-intensive tasks (matrix multiplication), disk I/O (writing large files), and memory usage (large list allocation).
+For data with a wide range of values, a logarithmic scale can be very effective. You can also customize the bar colors.
 
- 
+```python
+plot_profiling_stats(
+    all_stats,
+    title="Profile with Log Scale and Custom Colors",
+    use_log_scale=True,
+    bar_colors=['#2a9d8f', '#e9c46a', '#f4a261', '#e76f51']
+)
+```
 
+### 2.4 Including Zero-Value Metrics
 
-2. Network and Function Call Profiling: This visualization highlights network I/O (multiple API requests) and function calls (recursive Fibonacci calculation).
+If you need to see all metrics, including those with zero values, set `exclude_zero=False`.
 
+```python
+plot_profiling_stats(
+    all_stats,
+    title="Profile Including All Metrics (with Zeros)",
+    exclude_zero=False
+)
+```
 
-
-See `examples/examples_visualization.py` for the complete visualization examples, which include additional scenarios like network I/O and function call profiling.
+See `examples/examples_visualization.py` for more detailed examples.
 
 ### 3. Multithreaded Profiling
 
