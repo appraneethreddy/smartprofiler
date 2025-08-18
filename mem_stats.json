@@ -1,9 +1,0 @@
-[
-    {
-        "label": "large_list_allocation",
-        "metrics": {
-            "current_mb": 38.5670166015625,
-            "peak_mb": 38.567047119140625
-        }
-    }
-]

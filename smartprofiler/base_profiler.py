@@ -1,7 +1,7 @@
 import logging
 import threading
 from abc import ABC, abstractmethod
-import logging
+import os
 import json
 import csv
 from typing import Any, Callable, Dict, List, Optional
@@ -105,11 +105,14 @@ class BaseProfiler(ABC):
             self.logger.error(f"Could not acquire lock on {file_path} after 10 seconds. Another process may be holding it.")
         except Exception as e:
             self.logger.error(f"An unexpected error occurred during export: {e}")
+        finally:
+            if os.path.exists(lock_path):
+                os.remove(lock_path)
 
     def _export_to_json(self, file_path: str):
         """Private helper method to export stats to a JSON file."""
         try:
-            with open(file_path, 'w') as f:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.stats, f, indent=4)
         except (IOError, PermissionError) as e:
             self.logger.error(f"Error writing to JSON file {file_path}: {e}")
@@ -132,7 +135,7 @@ class BaseProfiler(ABC):
         sorted_header = sorted(list(header_fields), key=lambda x: (x != 'label', x))
 
         try:
-            with open(file_path, 'w', newline='') as f:
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=sorted_header)
                 writer.writeheader()
                 writer.writerows(flattened_data)
